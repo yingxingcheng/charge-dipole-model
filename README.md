@@ -1,4 +1,4 @@
-This fortran demo program implements the charge-dipole interaction model with Gaussian-type density functions, i.e., Q+P ISO [R] in Ref. [4].
+This fortran demo program implements the charge-dipole interaction model with Gaussian-type density functions.
 See [this link](https://link.aps.org/doi/10.1103/PhysRevB.75.045407) for more details.
 
 # Installation
