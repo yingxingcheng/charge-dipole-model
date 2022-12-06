@@ -44,7 +44,6 @@ program gauss_cd_model
 
    if (allocated(coords)) deallocate (coords)
    if (allocated(atom_name)) deallocate (atom_name)
-   stop
 
 100 if (io_file .ne. 0) write (*, *) "Error in reading input file"
 
