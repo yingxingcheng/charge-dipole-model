@@ -96,6 +96,8 @@ One should obtain the output as follows:
 Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
 ```
 
+The parameters used in this case is taken from P+Q ISO [R] model from Ref. [4].
+
 # References
 
 1. Applequist, J., Carl, J. R., & Fung, K. K. (1972). An Atom Dipole Interaction Model for Molecular Polarizability. Application to Polyatomic Molecules and Determination of Atom Polarizabilities. Journal of the American Chemical Society, 94(9), 2952–2960. https://doi.org/10.1021/ja00764a010
