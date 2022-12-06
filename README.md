@@ -21,7 +21,7 @@ Run `./main.x {xyz_file}` to compute the molecular dipole polarizability and `xy
 One should obtain the output as follows:
 
 ```shell
-    |---------------------------Input Geometry-----------------------------------------
+   |---------------------------Input Geometry-----------------------------------------
    All coordinates are in unit of Angstrom.
    Number of atoms   60
 
@@ -93,7 +93,6 @@ One should obtain the output as follows:
    Mean:     78.44   (Angstrom**3)
              11.62   (a.u.)
    | ---------------------------------------------------------------------------
-Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
 ```
 
 The parameters used in this case is taken from P+Q ISO [R] model from Ref. [4].
