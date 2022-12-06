@@ -1,11 +1,11 @@
-This fortran demo program implement charge-dipole interaction model with Gaussian-type density functions, i.e., Q+P ISO [R] in Ref. [4].
+This fortran demo program implements the charge-dipole interaction model with Gaussian-type density functions, i.e., Q+P ISO [R] in Ref. [4].
 See [this link](https://link.aps.org/doi/10.1103/PhysRevB.75.045407) for more details.
 
 # Installation
 
 One needs to install this program first by running
 
-```console
+```shell
 make
 ```
 and it is assumed that `gfortron` compiler and libraries `llapack` and `lblas` have been installed.
@@ -14,13 +14,13 @@ and it is assumed that `gfortron` compiler and libraries `llapack` and `lblas` h
 
 Run `./main.x {xyz_file}` to compute the molecular dipole polarizability and `xyz_file` is molecular geometry file with `xyz` format, e.g. `C60.xyz`:
 
-```console
+```shell
 ./main.x C60.xyz
 ```
 
 One should obtain the output as follows:
 
-```console
+```shell
 |---------------------------Input Geometry-----------------------------------------
 All coordinates are in unit of Angstrom.
 Number of atoms   60
