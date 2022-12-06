@@ -43,6 +43,7 @@ contains
       ! local variable
       integer :: i_myatom, j_myatom
       real*8 :: mol_pol_eigen(3)
+      real*8 :: mean_polar
 
       if (.not. allocated(matrix_ss)) allocate (matrix_ss(n_atoms, n_atoms))
       if (.not. allocated(matrix_sp)) allocate (matrix_sp(n_atoms, 3*n_atoms))
@@ -91,12 +92,15 @@ contains
       ! write(*, *) "working matrix W: "
       ! call print_matrix(relay_matrix_olson, 4*n_atoms+1, 4*n_atoms+1)
 
-      ! Contract relay_matrix^-1 for polarizability
       call inv(relay_matrix_olson, 4*n_atoms + 1)
       call compute_polar(relay_matrix_olson, coords, mol_pol_tensor)
 
-      write (*, '(3x, A)') "Molecular polarizability: "
+      write (*, '(3x, A)') "Molecular polarizability (Angstrom**3): "
       call print_matrix(mol_pol_tensor, 3, 3)
+
+      mean_polar = (mol_pol_tensor(1, 1) + mol_pol_tensor(2, 2) + mol_pol_tensor(3, 3))/3.0d0
+      write (*, '(3x, A, f10.2, 3x, A)') "Mean:", mean_polar, "(Angstrom**3)"
+      write (*, '(3x, A, f10.2, 3x, A)') "     ", mean_polar*bohr**3, "(a.u.)"
 
       write (info_str, '(2x,A)') &
          "| ---------------------------------------------------------------------------"
@@ -125,7 +129,7 @@ contains
       ! initio values
       matrix_pp = 0.0d0
 
-      ! compute relay matrix of  cluster or unit cell
+      ! compute relay matrix
       do i_row = 1, n_atoms, 1 !#1
          do i_col = i_row, n_atoms, 1 !#2
             TPP = 0.d0
@@ -171,8 +175,7 @@ contains
       real*8:: zeta_l, zeta_r, ratio, d_param, fermi_param
       integer :: i, j
 
-      !o dipole-dipole interaction tensor between two quantum harmonic
-      !  oscilators Tp-p damped with Fermi damping
+      ! dipole-dipole interaction tesor
       TPP(:, :) = 0.d0
     !!!!!!!!!!!!!!!!!!!!!!!!!
       ratio = r_ij/r_pp
@@ -210,7 +213,7 @@ contains
       ! initio values
       matrix_sp = 0.0d0
 
-      ! compute relay matrix of  cluster or unit cell
+      ! compute relay matrix
       do i_row = 1, n_atoms, 1 !#1
          do i_col = 1, n_atoms, 1 !#2
             TSP = 0.d0
@@ -393,6 +396,15 @@ contains
          ! ! Q+P ISO [R, alpha_iso]
          ! eta=0.84222897 ! <==>  Rs=0.67200149
          ! alpha=1.2517105
+      case ('Ag')
+         ! from L. Jensen, J. Chem. Phys. 135, 214103 (2012)
+         eta = 2.7529*bohr
+         alpha = 49.9843*bohr**3
+
+      case ('Au')
+         ! from L. Jensen, J. Chem. Phys. 135, 214103 (2012)
+         eta = 1.2159*bohr
+         alpha = 39.5297*bohr**3
 
       case default
          eta = 1.0
@@ -408,7 +420,7 @@ contains
       real*8, intent(in)::eta
       real*8, intent(out)::Rs
 
-      !Rp(iomega) ! Rp_eff definition from   A. Mayer, Phys. Rev. B, 75,045407(2007)
+      ! A. Mayer, Phys. Rev. B, 75,045407(2007)
       Rs = dsqrt(2.0d0/pi)*eta
       return
    end subroutine get_Rs
@@ -424,6 +436,7 @@ contains
    end subroutine get_Rp
 
    subroutine inv(mat, length)
+      ! Find the inverse matrix of a matirx.
       implicit none
       real*8, dimension(:, :), intent(inout) :: mat
       integer, intent(in) :: length
@@ -432,7 +445,6 @@ contains
       integer, dimension(length):: IPIV
       real*8, dimension(length):: WORK
 
-      ! find the inverse of relay_matrix
       call DGETRF(length, length, mat, length, IPIV, errorflag)
       if (errorflag .ne. 0) then
          write (info_str, '(A)') "Error** Matrix inversion failed in SCS module"
