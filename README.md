@@ -8,7 +8,7 @@ One needs to install this program first by running
 ```shell
 make
 ```
-and it is assumed that `gfortron` compiler and libraries `llapack` and `lblas` have been installed.
+and it is assumed that `gfortron` compiler and library `llapack` has been installed.
 
 # Usage
 
