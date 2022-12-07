@@ -336,7 +336,7 @@ contains
       real*8, dimension(3, n_atoms):: tmp
 
       D = mat(1:n_atoms, 1:n_atoms)
-      B = mat(1 + n_atoms:3*n_atoms, 1 + n_atoms:3*n_atoms)
+      B = mat(1 + n_atoms:4*n_atoms, 1 + n_atoms:4*n_atoms)
       call contract_matrix(B, polar)
 
       ! CALL DGEMM('N','N',M,N,K,ALPHA,A,M,B,K,BETA,C,M)
