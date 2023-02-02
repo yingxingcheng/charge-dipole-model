@@ -1,31 +1,33 @@
+! With some corrections by Alexandre Mayer (2 February 2023)
+
 module helper
    implicit none
 
    character*400 :: info_str
    ! monopole-monopole interaction matrix
-   real*8, dimension(:, :), allocatable:: matrix_ss
+   real*8, dimension(:, :), allocatable, save :: matrix_ss
    ! monopole-dipole interaction matrix
-   real*8, dimension(:, :), allocatable:: matrix_sp
+   real*8, dimension(:, :), allocatable, save :: matrix_sp
    ! dipole-dipole interaction matrix
-   real*8, dimension(:, :), allocatable:: matrix_pp
+   real*8, dimension(:, :), allocatable, save :: matrix_pp
    ! relay matrix used by Olson
-   real*8, dimension(:, :), allocatable:: relay_matrix_olson
+   real*8, dimension(:, :), allocatable, save :: relay_matrix_olson
    ! atomic hardness
-   real*8, dimension(:), allocatable:: eta
+   real*8, dimension(:), allocatable, save :: eta
    ! atomic dipole polarizability
-   real*8, dimension(:), allocatable:: alpha
+   real*8, dimension(:), allocatable, save :: alpha
    ! Gaussian radii of p-type function
-   real*8, dimension(:), allocatable:: R_p
+   real*8, dimension(:), allocatable, save :: R_p
    ! Gaussian radii of s-type function
-   real*8, dimension(:), allocatable:: R_s
+   real*8, dimension(:), allocatable, save :: R_s
    ! Molecular polarizability
-   real*8, dimension(3, 3):: mol_pol_tensor
+   real*8, dimension(3, 3) :: mol_pol_tensor
 
     !! constant
-   real*8 :: bohr, pi, three_by_pi
+   real*8 :: bohr, pi, three_by_pi, Angstrom
     !! input setting
-   character*2, allocatable, dimension(:) :: atom_name
-   real*8, allocatable, dimension(:, :) :: coords
+   character*2, allocatable, dimension(:), save :: atom_name
+   real*8, allocatable, dimension(:, :), save :: coords
 
    ! number of atoms
    integer :: n_atoms
@@ -36,6 +38,7 @@ contains
       bohr = 0.52917721d0
       pi = 3.14159265358979323846d0
       three_by_pi = 0.954929658551372d0
+      Angstrom = 1.E-10_8
    end subroutine init_constants
 
    subroutine olson_cd_model
@@ -44,7 +47,13 @@ contains
       integer :: i_myatom, j_myatom
       real*8 :: mol_pol_eigen(3)
       real*8 :: mean_polar
-
+!
+      real(kind=8) :: Field, TotalDipole
+      real(kind=8), dimension(:, :), allocatable :: B
+      real(kind=8), dimension(:), allocatable :: WORK
+      integer, dimension(:), allocatable :: IPIV
+      integer :: i, j, k, dir, LWORK, info
+!
       if (.not. allocated(matrix_ss)) allocate (matrix_ss(n_atoms, n_atoms))
       if (.not. allocated(matrix_sp)) allocate (matrix_sp(n_atoms, 3*n_atoms))
       if (.not. allocated(matrix_pp)) allocate (matrix_pp(3*n_atoms, 3*n_atoms))
@@ -60,6 +69,9 @@ contains
       eta = 0.0d0
       alpha = 0.0d0
       matrix_pp = 0.0d0
+      matrix_sp = 0.0d0
+      matrix_ss = 0.0d0
+      relay_matrix_olson = 0.0d0
       mol_pol_tensor = 0.0d0
 
       ! loop over atoms
@@ -87,13 +99,65 @@ contains
       ! write(*, *) "T_ss: "
       ! call print_matrix(matrix_ss, n_atoms, n_atoms)
 
-      call build_working_matrix_olson(matrix_ss, matrix_sp, matrix_pp, relay_matrix_olson)
+      if (.false.) then
 
-      ! write(*, *) "working matrix W: "
-      ! call print_matrix(relay_matrix_olson, 4*n_atoms+1, 4*n_atoms+1)
+! Olson's method
+! ++++++++++++++
+         call build_working_matrix_olson(matrix_ss, matrix_sp, matrix_pp, relay_matrix_olson)
 
-      call inv(relay_matrix_olson, 4*n_atoms + 1)
-      call compute_polar(relay_matrix_olson, coords, mol_pol_tensor)
+         ! write(*, *) "working matrix W: "
+         ! call print_matrix(relay_matrix_olson, 4*n_atoms+1, 4*n_atoms+1)
+
+         call inv(relay_matrix_olson, 4*n_atoms + 1)
+
+         call compute_polar(relay_matrix_olson, coords, mol_pol_tensor)
+
+      else
+
+! Solve a system of equations (method of Alexandre Mayer)
+! +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+         call build_working_matrix_mayer(matrix_ss, matrix_sp, matrix_pp, relay_matrix_olson)
+
+         Field = 1._8
+
+! - Build right-hand side
+! -----------------------
+         allocate (B(1:4*n_atoms + 1, 1:3)); B = 0._8
+
+         do dir = 1, 3
+            do i = 1, n_atoms
+               B(i, dir) = Field*coords(dir, i)
+            end do
+            do i = 1, n_atoms
+               B(n_atoms + (i - 1)*3 + dir, dir) = Field
+            end do
+         end do
+         B(4*n_atoms + 1, 1:3) = 0._8 ! Qtot=0 here
+
+! - Solve the system of equations using DSYSV from the LAPACK library
+! -------------------------------------------------------------------
+         LWORK = 10*(4*n_atoms + 1)
+         allocate (IPIV(1:4*n_atoms + 1), WORK(1:LWORK))
+         call DSYSV('U', 4*n_atoms + 1, 3, relay_matrix_olson, 4*n_atoms + 1, IPIV, B, 4*n_atoms + 1, WORK, LWORK, info)
+         if (info /= 0) print *, "Problem with DSYSV", info
+         deallocate (WORK, IPIV)
+
+! - Calculation of the polarizability tensor
+! ------------------------------------------
+         mol_pol_tensor = 0._8
+         do j = 1, 3
+            do i = 1, 3
+               TotalDipole = 0._8
+               do k = 1, n_atoms
+                  TotalDipole = TotalDipole + B(k, j)*coords(i, k)
+               end do
+               do k = 1, n_atoms
+                  TotalDipole = TotalDipole + B(n_atoms + (k - 1)*3 + i, j)
+               end do
+               mol_pol_tensor(i, j) = TotalDipole/Field
+            end do
+         end do
+      end if
 
       write (*, '(3x, A)') "Molecular polarizability (Angstrom**3): "
       call print_matrix(mol_pol_tensor, 3, 3)
@@ -197,7 +261,7 @@ contains
       TPQ = TPQ*zeta_l
       r_tensor = r_tensor*zeta_r
       TPP = TPQ - r_tensor
-      TPP = -1.d0*TPP
+      TPP = -1.d0*TPP       ! change of sign !
       return
    end subroutine T_erf_coulomb_pp
 
@@ -274,6 +338,7 @@ contains
                dxyz(:) = coords(:, i_row) - coords(:, i_col)
                r_ij = dsqrt((dxyz(1))**2.0d0 + (dxyz(2))**2.0d0 + (dxyz(3))**2.0d0)
                r_ss = dsqrt(R_s(i_row)**2 + R_s(i_col)**2)
+
                call T_erf_coulomb_ss(dxyz, r_ij, r_ss, TSS)
                matrix_ss(i_row, i_col) = TSS
             else
@@ -297,7 +362,9 @@ contains
       integer :: i, j
 
       zeta = r_ij/r_ss
+
       TSS = derf(zeta)/r_ij
+
       return
    end subroutine T_erf_coulomb_ss
 
@@ -312,17 +379,44 @@ contains
       integer :: i, j
 
       W(1:n_atoms, 1:n_atoms) = -Tss
+
       W(1:n_atoms, n_atoms + 1:4*n_atoms) = -Tsp
+
       W(1:n_atoms, 4*n_atoms + 1) = 1.0d0
 
       W(n_atoms + 1:4*n_atoms, 1:n_atoms) = -TRANSPOSE(Tsp)
-      W(n_atoms + 1:4*n_atoms, n_atoms + 1:4*n_atoms) = Tpp
+
+      W(n_atoms + 1:4*n_atoms, n_atoms + 1:4*n_atoms) = Tpp  ! The sign here is inconsistent with what I have
+      ! done in build_working_matrix_olson, what results
+      ! are false if I change this sign.
       W(n_atoms + 1:4*n_atoms, 4*n_atoms + 1) = 0.0d0
 
       W(4*n_atoms + 1, 1:n_atoms) = 1.0d0
       W(4*n_atoms + 1, n_atoms + 1:4*n_atoms + 1) = 0.0d0
       return
    end subroutine build_working_matrix_olson
+
+   subroutine build_working_matrix_mayer(Tss, Tsp, Tpp, W)
+      implicit none
+      real*8, dimension(:, :), intent(in)::Tss
+      real*8, dimension(:, :), intent(in)::Tsp
+      real*8, dimension(:, :), intent(in)::Tpp
+      real*8, dimension(:, :), intent(out)::W
+
+      W(1:n_atoms, 1:n_atoms) = Tss            ! sign correction by Alexandre Mayer
+
+      W(1:n_atoms, n_atoms + 1:4*n_atoms) = Tsp  ! sign correction by Alexandre Mayer
+
+      W(1:n_atoms, 4*n_atoms + 1) = 1.0d0
+
+      W(n_atoms + 1:4*n_atoms, 1:n_atoms) = TRANSPOSE(Tsp)   ! sign correction by Alexandre Mayer
+      W(n_atoms + 1:4*n_atoms, n_atoms + 1:4*n_atoms) = Tpp
+      W(n_atoms + 1:4*n_atoms, 4*n_atoms + 1) = 0.0d0
+
+      W(4*n_atoms + 1, 1:n_atoms) = 1.0d0
+      W(4*n_atoms + 1, n_atoms + 1:4*n_atoms + 1) = 0.0d0
+      return
+   end subroutine build_working_matrix_mayer
 
    subroutine compute_polar(mat, coords, polar)
       implicit none
@@ -387,6 +481,15 @@ contains
          ! ! Q+P ISO [R, alpha_iso]
          ! eta=0.84222897 ! <==>  Rs=0.67200149
          ! alpha=1.2517105
+
+! Correction from Alexandre Mayer
+!          Rcharge    =  0.672001495361328 [Angstrom]
+!          alpha_iso  =  1.25171051025391
+
+         eta = dsqrt(pi/2.d0)*0.672001495361328d0
+
+         alpha = 1.25171051025391d0
+
       case ('Ag')
          ! from L. Jensen, J. Chem. Phys. 135, 214103 (2012)
          eta = 2.7529*bohr
@@ -412,7 +515,9 @@ contains
       real*8, intent(out)::Rs
 
       ! A. Mayer, Phys. Rev. B, 75,045407(2007)
+
       Rs = dsqrt(2.0d0/pi)*eta
+
       return
    end subroutine get_Rs
 
